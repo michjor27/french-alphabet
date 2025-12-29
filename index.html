@@ -21,14 +21,44 @@ button.play{
   background:#fff;
   cursor:pointer;
 }
+
+button.stop{
+  font-size:14px;
+  line-height:1;
+  padding:4px 7px;
+  border:1px solid #666;
+  border-radius:6px;
+  background:#fff;
+  cursor:pointer;
+  margin-left:6px;
+}
+button.stop:active{transform:translateY(1px)}
+
+
 button.play:active{transform:translateY(1px)}
 .small-note{color:#333;font-size:13px}
 </style>
 </head>
 <body>
 <h1>French Alphabet + Sound / Vowel Families</h1>
-<p><strong>Alphabet practice A–Z:</strong> <button class="play" data-src="FrenchAlphabetFull.mp3" aria-label="Play FrenchAlphabetFull.mp3" aria-pressed="false">▶</button></p>
+<p>
+  <strong>Alphabet practice A–Z:</strong>
+  <button class="play" data-src="FrenchAlphabetFull.mp3" aria-label="Play FrenchAlphabetFull.mp3" aria-pressed="false">▶</button>
+  <button id="stopAudio" class="stop" type="button" aria-label="Stop audio">■</button>
+</p>
 <h2>Alphabet Table</h2>
+
+<div id="selfAssess" style="border:1px solid #b7b7b7;padding:14px;border-radius:10px;max-width:720px;margin:14px 0;">
+  <button id="selfAssessBtn" class="play" type="button">Self-assessment: Random letter</button>
+
+  <div style="margin-top:10px;">
+    <div style="font-size:52px;font-weight:700;" id="saLetter">—</div>
+    <div style="margin-top:6px;font-size:16px;" id="saExamples"></div>
+  </div>
+</div>
+
+
+
 <table>
 <thead><tr>
 <th>Letter</th>
@@ -225,19 +255,118 @@ The lips are fully rounded. The back of the tongue is midway up in the mouth. It
 
 <script>
 (function(){
-  const player = new Audio();
-  player.preload = "none";
+  // One shared player for the whole page (play + stop)
+  window.player = new Audio();
+  window.player.preload = "none";
+
+  // Play buttons
   document.addEventListener("click", function(e){
     const btn = e.target.closest("button.play");
     if(!btn) return;
+
     const src = btn.getAttribute("data-src");
     if(!src) return;
-    player.pause();
-    player.currentTime = 0;
-    player.src = src;
-    player.play().catch(function(){});
+
+    window.player.pause();
+    window.player.currentTime = 0;
+    window.player.src = src;
+
+    window.player.play().catch(function(){ /* ignore */ });
   });
+
+  // Stop button (stops whatever is playing)
+  const stopBtn = document.getElementById("stopAudio");
+  if (stopBtn) {
+    stopBtn.addEventListener("click", function () {
+      window.player.pause();
+      window.player.currentTime = 0;
+    });
+  }
 })();
 </script>
+
+
+<script>
+(function () {
+  const btn = document.getElementById("selfAssessBtn");
+  const letterBox = document.getElementById("saLetter");
+  const examplesBox = document.getElementById("saExamples");
+
+  if (!btn || !letterBox || !examplesBox) return;
+
+  const player = new Audio();
+  player.preload = "none";
+
+  // Find candidate rows: must have at least 5 tds and a sound-file button in the last cell
+  function getRows() {
+    const allRows = Array.from(document.querySelectorAll("table tr"));
+    return allRows.filter(tr => {
+      const tds = tr.querySelectorAll("td");
+      if (tds.length < 5) return false;
+      const soundBtn = tds[4].querySelector("button.play[data-src]");
+      return !!soundBtn;
+    });
+  }
+
+  function pickRandom(arr) {
+    return arr[Math.floor(Math.random() * arr.length)];
+  }
+
+  function extractLetterDisplay(td0) {
+    // Use the visible letter at the start (before line breaks), e.g., "B"
+    // td0.innerText includes the IPA line; we take first non-empty line.
+    const lines = (td0.innerText || "").split("\n").map(s => s.trim()).filter(Boolean);
+    return lines.length ? lines[0] : "—";
+  }
+
+  async function runSelfAssessment() {
+    btn.disabled = true;
+    examplesBox.textContent = ""; // hide examples initially
+
+    const rows = getRows();
+    if (!rows.length) {
+      letterBox.textContent = "—";
+      examplesBox.textContent = "No valid alphabet rows found.";
+      btn.disabled = false;
+      return;
+    }
+
+    const row = pickRandom(rows);
+    const tds = row.querySelectorAll("td");
+
+    const letterDisplay = extractLetterDisplay(tds[0]);
+    const examplesText = (tds[3].innerText || "").trim();
+
+    const soundBtn = tds[4].querySelector("button.play[data-src]");
+    const soundSrc = soundBtn ? soundBtn.getAttribute("data-src") : null;
+
+    // Step 1: show letter immediately
+    letterBox.textContent = letterDisplay;
+
+    // Step 2: wait 2 seconds
+    await new Promise(r => setTimeout(r, 2000));
+
+    // Step 3: reveal examples + play audio
+    examplesBox.textContent = examplesText;
+
+    if (soundSrc) {
+      try {
+        player.pause();
+        player.currentTime = 0;
+        player.src = soundSrc;
+        await player.play();
+      } catch (e) {
+        // If autoplay restrictions or missing file
+        // Keep silent; user can still use the row buttons manually
+      }
+    }
+
+    btn.disabled = false;
+  }
+
+  btn.addEventListener("click", runSelfAssessment);
+})();
+</script>
+
 
 </body></html>
